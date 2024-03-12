@@ -1,4 +1,5 @@
 import logging
+import random
 from functools import wraps
 from time import sleep
 from typing import Dict
@@ -41,6 +42,51 @@ def authenticated(func):
 def throttle_retry(func):
     """
     Decorator to retry when throttleError is received.
+
+    FusionSolar's rate limits are ridiculous:
+
+    Login Interface: The timeout value is 30 minutes, which will be reset if any service invokes this OpenAPI in 30
+    minutes. If the XSRF-TOKEN has not expired, the user does not need to log in again.
+
+    Logout Interface: Users will be logged out upon timeout.
+
+    Power Plant List Interface: The recommended maximum number of API calls per day is 24. This interface is used to
+    obtain the list of authorized plants. If the authorized plants have not changed, there is no need to invoke this
+    interface.
+
+    Interface for Real-time Plant Data: The recommended maximum number of API calls per day is 288. The interface
+    data is updated every 5 minutes.
+
+    Interface for Hourly Plant Data: The recommended maximum number of API calls per day is 24. The interface data is
+    updated every hour.
+
+    Interface for Daily Plant Data: The recommended maximum number of API calls per day is 1. The interface data is
+    updated every day.
+
+    Interface for Yearly Plant Data: The recommended maximum number of API calls per day is 1. The interface data is
+    updated every day.
+
+    Device List Interface: This OpenAPI is mandatory if device-level data needs to be queried. The recommended maximum
+    number of API calls per day is 1. When the device list has not changed, the data returned by this interface remains
+    the same.
+
+    Real-time Device Data Interface: The recommended maximum number of API calls per day is 288. The interface data is
+    updated every 5 minutes.
+
+    5-minute Device Data Interface: The recommended maximum number of API calls per day is 288. The interface data is
+    updated every 5 minutes.
+
+    Daily Device Data Interface: The recommended maximum number of API calls per day is 24. The interface data is
+    updated every hour.
+
+    Monthly Device Data Interface: The recommended maximum number of API calls per day is 1. The interface data is
+    updated every day.
+
+    Yearly Device Data Interface: The recommended maximum number of API calls per day is 1. The interface data is
+    updated every day.
+
+    Device Alarm Interface: The recommended maximum number of API calls per day is 288. The interface data is updated
+    every 5 minutes.
     """
 
     @wraps(func)
@@ -50,8 +96,8 @@ def throttle_retry(func):
             return func(*args, **kwargs)
         except HTTPError407 as e:
             for i in range(1, self.max_retry + 1):
-                delay = i * 3
-                logging.debug(f'Sleeping {delay} seconds')
+                delay = i * 20 + random.randint(3, 10)
+                logging.info(f'FusionSolar Client: got HTTPError407 sleeping for {delay} seconds')
                 sleep(delay)
                 try:
                     return func(*args, **kwargs)
@@ -69,7 +115,7 @@ def throttle_retry(func):
 
  
 class Client:
-    def __init__(self, user_name: str, system_code: str, max_retry: int = 10, base_url: str = "https://eu5.fusionsolar.huawei.com/thirdData"):
+    def __init__(self, user_name: str, system_code: str, max_retry: int = 6, base_url: str = "https://eu5.fusionsolar.huawei.com/thirdData"):
         self.user_name = user_name
         self.system_code = system_code
         self.max_retry = max_retry
